@@ -11,9 +11,9 @@
 	;
 	; Define all to zero, put to one your desired target
 	;
-COLECO:		equ 1		; Colecovision consoles
+COLECO:		equ 0		; Colecovision consoles
 
-MSX: 		equ 0		; MSX computers
+MSX: 		equ 1		; MSX computers
 
 MEMOTECH:	equ 0		; Memotech computers
 	CPM:		equ 0	; If MEMOTECH is defined, define to 1 for CP/M
@@ -861,12 +861,36 @@ move_over:
 	jp game_loop
 
 	;
+	;
+	;
+show_message_all:
+	call RDVRM
+	push af
+	push hl
+	ld a,GR_HERO	
+	call WRTVRM
+	push de
+	call save_bar
+	pop hl
+	call show_message
+	call read_stick
+	call restore_bar
+	pop hl
+	pop af
+	call WRTVRM
+	ret
+
+	;
 	; Amulet of Yendor found!
 	;
 amulet_found:
+	ld de,.2
+	call show_message_all
 	ld a,$ff
 	ld (yendor),a
 	jp move_over
+
+.2:	db "You found the Amulet of Yendor!!!",0
 
         ; ______
         ; I    I
@@ -875,10 +899,14 @@ amulet_found:
         ;  \__/
         ;   
 armor_found:
+	ld de,.2
+	call show_message_all
 	ld a,(armor)
 	inc a		; Increase armor level
 	ld (armor),a
 	jp move_over
+
+.2:	db "You found some armor.",0
 
         ;
         ;       /| _____________
@@ -886,13 +914,21 @@ armor_found:
         ;       \|
         ;
 weapon_found:
+	ld de,.2
+	call show_message_all
 	ld a,(weapon)
 	inc a		; Increase weapon level
 	ld (weapon),a
 	jp move_over
 
+.2:	db "You found a better weapon.",0
+
 gold_found:
+	ld de,.2
+	call show_message_all
 	jp move_over
+
+.2:	db "You found gold!",0
 
         ;
         ;     /--\
@@ -900,6 +936,8 @@ gold_found:
         ;     \--/
         ;
 food_found:
+	ld de,.2
+	call show_message_all
 	push hl
 	call random
 	ld a,l
@@ -914,10 +952,15 @@ food_found:
 	pop hl
 	jp move_over
 
+.2:
+	db "You found some food.",0
+
 	;
 	; Aaaargghhhhhh!
 	;
 trap_found:
+	ld de,.2
+	call show_message_all
 	push hl
 	call random
 	ld a,l
@@ -933,12 +976,15 @@ trap_found:
 	pop hl
 	jp move_over
 
+.2:	db "Aaarghh!!! A trap.",0
+
 	;
 	; Let's battle!!!
 	;
 battle:
 	push hl
 	and $1f
+	ld (monster),a
 	add a,a
 	ld l,a
 	ld h,0
@@ -947,6 +993,7 @@ battle:
 	; Player's attack
 .1:	call random
 	ld a,(weapon)
+	inc a
 	ld b,a
 	ld a,l
 .2:	sub b
@@ -954,7 +1001,9 @@ battle:
 	add a,b
 	ld e,a
 	ld d,0
-	inc de
+	push de
+	call announce_player_hit
+	pop de
 	ld hl,(monster_hp)
 	or a
 	sbc hl,de
@@ -965,14 +1014,20 @@ battle:
 	ld a,(armor)
 	ld c,a
 	ld a,(attack)
+	inc a
 	ld b,a
 	ld a,l
 .4:	sub b
 	jr nc,.4
 	add a,b
-	inc a
 	sub c
-	jr c,.5
+	jr nc,$+3
+	xor a
+	push af
+	ld e,a
+	ld d,0
+	call announce_enemy_hit
+	pop af
 	or a
 	jr z,.5
 	neg
@@ -981,7 +1036,6 @@ battle:
 	call add_hp
 	call update_hp
 .5:
-	call read_stick
 	jp .1
 
 .3:	pop hl
@@ -1022,10 +1076,254 @@ add_hp:
 	db "You are dead!",0
 
 	;
+	; Save background of status bar and clear it
+	;
+save_bar:
+	ld hl,$3800
+	ld de,temp
+	ld b,40
+.1:	call RDVRM	
+	ld (de),a
+	inc de
+	inc hl
+	djnz .1
+	ld hl,$3800
+	ld bc,$0020
+	xor a
+	call FILVRM
+	ret
+
+	;
+	; Restore contents under the bar
+	;
+restore_bar:
+	ld hl,temp
+	ld de,$3800
+	ld bc,40
+	jp LDIRVM
+
+	;
+	; Announce enemy's hit
+	;
+announce_enemy_hit:
+	push de
+	call save_bar
+	ld hl,$3800
+	ld a,$54
+	call WRTVRM
+	inc hl
+	ld a,$68
+	call WRTVRM
+	inc hl
+	ld a,$65
+	call WRTVRM
+	inc hl
+	ld a,$20
+	call WRTVRM
+	inc hl
+	ex de,hl
+
+	ld a,(monster)
+	add a,a
+	ld c,a
+	ld b,0
+	ld hl,monster_list
+	add hl,bc
+	ld a,(hl)
+	inc hl
+	ld h,(hl)
+	ld l,a
+	call show_message2
+
+	ex de,hl
+	ex (sp),hl
+	ex de,hl
+	ld a,d
+	or e
+	jr z,.1
+	ld a,(lfsr)
+	and 6
+	ld e,a
+	ld d,0
+	ld hl,.l0
+	add hl,de
+	jr .2
+
+	; Miss
+.1:	
+	ld a,(lfsr)
+	and 6
+	ld e,a
+	ld d,0
+	ld hl,.l1
+	add hl,de
+.2:
+	ld a,(hl)
+	inc hl
+	ld h,(hl)
+	ld l,a
+	pop de
+	call show_message2
+	call read_stick
+	jp restore_bar
+
+.l0:	dw .m5
+	dw .m6
+	dw .m7
+	dw .m8
+
+.l1:	dw .m1
+	dw .m2
+	dw .m3
+	dw .m4
+
+	; Enemy to player
+.m1:	db " swings and misses you.",0
+.m2:	db " misses you.",0
+.m3:	db " barely misses you.",0
+.m4:	db " doesn't hit you.",0
+
+.m5:	db " hit you.",0
+.m6:	db " hit you.",0
+.m7:	db " has injured you.",0
+.m8:	db " swings and hits you.",0
+
+	;
+	; Announce player's hit
+	;
+announce_player_hit:
+	push de
+	call save_bar
+	pop de
+
+	ld a,d
+	or e
+	jr z,.1
+	ld a,(lfsr)
+	and 6
+	ld e,a
+	ld d,0
+	ld hl,.l0
+	add hl,de
+	jr .2
+
+	; Miss
+.1:	
+	ld a,(lfsr)
+	and 6
+	ld e,a
+	ld d,0
+	ld hl,.l1
+	add hl,de
+.2:
+	ld a,(hl)
+	inc hl
+	ld h,(hl)
+	ld l,a
+	ld de,$3800
+	call show_message
+	ld a,(monster)
+	add a,a
+	ld c,a
+	ld b,0
+	ld hl,monster_list
+	add hl,bc
+	ld a,(hl)
+	inc hl
+	ld h,(hl)
+	ld l,a
+	call show_message2
+	call read_stick
+	jp restore_bar
+
+.l0:	dw .m5
+	dw .m6
+	dw .m7
+	dw .m8
+
+.l1:	dw .m1
+	dw .m2
+	dw .m3
+	dw .m4
+
+	
+	; Player to enemy
+	;   0123456789012345678901234567890123456789
+.m1:	db "You swing and miss the ",0
+.m2:	db "You miss the ",0
+.m3:	db "You barely miss the ",0
+.m4:	db "You don't hit the ",0
+
+.m5:	db "You hit the ",0
+.m6:	db "You hit the ",0
+.m7:	db "You have injured the ",0
+.m8:	db "You swing and hit the ",0
+
+	;
+	; List of monsters
+	;
+monster_list:
+	dw 0
+	dw .m1
+	dw .m2
+	dw .m3
+	dw .m4
+	dw .m5
+	dw .m6
+	dw .m7
+	dw .m8
+	dw .m9
+	dw .m10
+	dw .m11
+	dw .m12
+	dw .m13
+	dw .m14
+	dw .m15
+	dw .m16
+	dw .m17
+	dw .m18
+	dw .m19
+	dw .m20
+	dw .m21
+	dw .m22
+	dw .m23
+	dw .m24
+	dw .m25
+	dw .m26
+
+.m1:	db "aardvark",0
+.m2:	db "bee",0
+.m3:	db "crocodile",0
+.m4:	db "demon",0
+.m5:	db "elf",0
+.m6:	db "fairy",0
+.m7:	db "goober",0
+.m8:	db "hanta",0
+.m9:	db "ilkor",0
+.m10:	db "jabba",0
+.m11:	db "kelkor",0
+.m12:	db "lycan",0
+.m13:	db "mole",0
+.m14:	db "number",0
+.m15:	db "okapi",0
+.m16:	db "proteus",0
+.m17:	db "quagga",0
+.m18:	db "rancor",0
+.m19:	db "snake",0
+.m20:	db "trantor",0
+.m21:	db "unicorn",0
+.m22:	db "valkor",0
+.m23:	db "werken",0
+.m24:	db "xantor",0
+.m25:	db "manquark",0
+.m26:	db "zombie master",0
+
+	;
 	; Show message
 	;
 show_message:
 	ld de,$3800
+show_message2:
 .1:	ld a,(hl)
 	or a
 	ret z
@@ -1745,9 +2043,12 @@ box_w:	rb 1
 box_h:	rb 1
 hero:	rb 2
 debounce: rb 1
+monster:	rb 1
 monster_hp:	rb 2
 attack:	rb 1
 first:	rb 1
+
+temp:	rb 40
 
     if MSX
 	org $e400
