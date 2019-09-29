@@ -12,8 +12,8 @@
 
 	org $4000,$7fff
 
-VDP.DR:	equ $0006
-VDP.DW:	equ $0007
+VDP.DR:	equ $0006	; Memory location with port number for VDP data read
+VDP.DW:	equ $0007	; Memory location with port number for VDP data write
 
 WRTVDP:	equ $0047
 RDVRM:	equ $004a
@@ -23,19 +23,52 @@ LDIRVM:	equ $005c
 GTSTCK:	equ $00d5
 GTTRIG:	equ $00d8
 
-	db $41,$42
-	dw inicio
+ROW_WIDTH:      equ 40		; Width in bytes of each video row
+BOX_MAX_WIDTH:  equ 11		; Max width of a room box
+BOX_MAX_HEIGHT: equ 6		; Max height of a room box
+BOX_WIDTH:      equ 13		; Width of box area on screen
+BOX_HEIGHT:     equ 8		; Height of box area on screen
+
+GR_VERT:        equ 0xba	; Vertical line graphic
+GR_TOP_RIGHT:   equ 0xbb	; Top right graphic
+GR_BOT_RIGHT:   equ 0xbc	; Bottom right graphic
+GR_BOT_LEFT:    equ 0xc8	; Bottom left graphic
+GR_TOP_LEFT:    equ 0xc9	; Top left graphic
+GR_HORIZ:       equ 0xcd	; Horizontal line graphic
+
+GR_TUNNEL:      equ 0xb1	; Tunnel graphic (shaded block)
+GR_DOOR:        equ 0xce	; Door graphic (crosshair graphic)
+GR_FLOOR:       equ 0xfa	; Floor graphic (middle point)
+
+GR_HERO:        equ 0x01	; Hero graphic (smiling face)
+
+	db $41,$42	; MSX cartridge header
+	dw inicio	; Start of game
 	dw 0
 	dw 0
 	dw 0
 
+	;
+	; Interruption handler
+	;
 int_handler:
 	ld a,(VDP.DR)
 	ld c,a
 	inc c
 	in a,(c)
+
+	ld hl,(ticks)
+	inc hl
+	ld (ticks),hl
+	ld de,(lfsr)
+	add hl,de
+	ld (lfsr),hl
+
 	ret
 
+	;
+	; Start of game
+	;
 inicio:
 	ld sp,stack
 	; Sound guaranteed to be off
@@ -46,7 +79,200 @@ inicio:
 
 	call vdp_mode_0
 
+	xor a
+	ld (level),a
+	ld (armor),a
+	ld a,1
+	ld (yendor),a
+	ld (weapon),a
+	ld hl,16
+	ld (hp),hl
+
+generate_dungeon:
+	ld a,(yendor)
+	ld b,a
+	ld a,(level)
+	add a,b
+	ld (level),a
+	or a
+	jp z,game_won
+
+	ld hl,(lfsr)
+	ld a,h
+	and $41
+	or $1a
+	ld h,a
+	ld a,l
+	and $82
+	or $6d
+	ld l,a
+	ld (conn),hl
+
+	ld a,(page)
+	xor $04
+	ld (page),a
+
+	;
+	; Clear the screen
+	;
+	ld h,a
+	ld l,0
+	ld bc,$0400
+	xor a
+	call FILVRM
+
+	;
+	; Draw the nine rooms
+	;
+	ld hl,ROW_WIDTH*(BOX_HEIGHT/2-2)+(BOX_WIDTH/2-2)
+	ld a,(page)
+	add a,h
+	ld h,a
+.7:
+	push hl
+	push hl
+	ld de,ROW_WIDTH+2	; Get the center of room
+	add hl,de
+	ld de,(conn)
+	srl d
+	rr e
+	ld (conn),de
+	jr nc,.3
+	push hl
+	ld b,BOX_WIDTH
+	ld a,GR_TUNNEL
+	call WRTVRM
+	inc hl
+	djnz $-4
+	pop hl
+
+.3:	ld de,(conn)
+	srl d
+	rr e
+	ld (conn),de
+	jr nc,.5
+	ld b,BOX_HEIGHT
+	ld a,GR_TUNNEL
+	ld de,ROW_WIDTH
+.4:	call WRTVRM
+	add hl,de
+	djnz .4
+.5:
+	call random
+	ld a,l
+.8:	sub BOX_MAX_WIDTH-2
+	jr nc,.8
+	add a,BOX_MAX_WIDTH-1
+	ld (box_w),a
+	ld a,h
+.9:	sub BOX_MAX_HEIGHT-2
+	jr nc,.9
+	add a,BOX_MAX_HEIGHT-1
+	ld (box_h),a
+	and $fe
+	ld l,a
+	ld h,0
+	add hl,hl	; x2
+	add hl,hl	; x4
+	add hl,hl	; x8
+	ld d,h
+	ld e,l
+	add hl,hl	; x16
+	add hl,hl	; x32
+	add hl,de	; x40
+	ld a,(box_w)
+	srl a
+	ld e,a
+	ld d,0
+	add hl,de
+	ex de,hl
+	pop hl
+	or a
+	sbc hl,de
+	ld ix,GR_TOP_LEFT
+	ld iy,GR_TOP_RIGHT*256+GR_HORIZ
+	call fill
+.10:	ld ix,GR_VERT
+	ld iy,GR_VERT*256+GR_FLOOR
+	call fill
+	ld a,(box_h)
+	dec a
+	ld (box_h),a
+	jp p,.10
+	ld ix,GR_BOT_LEFT
+	ld iy,GR_BOT_RIGHT*256+GR_HORIZ
+	call fill
+	pop hl
+	ld de,BOX_WIDTH
+	add hl,de
+	ld a,l
+	cp $fb
+	jr z,.1
+	cp $bb
+	jr z,.1
+	cp $7b
+	jr nz,.6
+.1:
+	ld de,ROW_WIDTH*BOX_HEIGHT-BOX_WIDTH*3
+	add hl,de
+.6:
+	ld a,l
+	cp $14
+	jp nz,.7
+
+	;
+	; Switch video pages
+	;
+	ld a,(page)
+	rrca
+	rrca
+	ld b,a
+	ld c,$02
+	call WRTVDP
+
 	jr $
+
+game_won:
+	jr $
+
+	;
+	; Fill a row on screen for a room
+	;
+fill:	push hl
+	ld a,ixl
+	call door
+	ld a,(box_w)
+	inc a
+	ld b,a
+.1:
+	ld a,iyl
+	call door
+	djnz .1
+	ld a,iyh
+	call door
+	pop hl
+	ld de,ROW_WIDTH
+	add hl,de
+	ret
+
+	;
+	; Draw a room character on screen
+	;
+door:
+	cp GR_HORIZ
+	jr z,.1
+	cp GR_VERT
+	jr nz,.2
+.1:
+	ld c,a
+	call RDVRM
+	cp GR_TUNNEL
+	ld a,c
+	jr nz,.2
+	ld a,GR_DOOR
+.2:	call WRTVRM
+	inc hl
+	ret
 
         ;
         ; Mode 0 table (text 40x24)
@@ -90,8 +316,46 @@ vdp_mode_0:
 	ld bc,16
 	call LDIRVM
 
+	ld a,$38
+	ld (page),a
+
 	ld bc,$f001	; Enable screen
 	jp WRTVDP
+
+	;
+	; Generates a pseudorandom number
+	; Maximum longitude LFSR per our friend: Internet
+	;
+random:
+        ld hl,(lfsr)
+        ld a,h
+        or l
+        jr nz,.0
+        ld hl,$7811
+.0:     ld a,h
+        and $80
+        ld b,a
+        ld a,h
+        and $02
+        rrca
+        rrca
+        xor b
+        ld b,a
+        ld a,h
+        and $01
+        rrca
+        xor b
+        ld b,a
+        ld a,l
+        and $20
+        rlca
+        rlca
+        xor b
+        rlca
+        rr h
+        rr l
+        ld (lfsr),hl
+        ret
 
 test:
 	db "OSCAR WAS HERE ",$01
@@ -171,34 +435,34 @@ letters_bitmaps:
 
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $40
 	db $20,$50,$88,$88,$f8,$88,$88,$00	; $41
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $42
+	db $f0,$88,$88,$f0,$88,$88,$f0,$00	; $42
 	db $70,$88,$80,$80,$80,$88,$70,$00	; $43
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $44
+	db $f0,$88,$88,$88,$88,$88,$f0,$00	; $44
 	db $f8,$80,$80,$f0,$80,$80,$f8,$00	; $45
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $46
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $47
+	db $f8,$80,$80,$f0,$80,$80,$80,$00	; $46
+	db $70,$88,$80,$98,$88,$88,$70,$00	; $47
 
 	db $88,$88,$88,$f8,$88,$88,$88,$00	; $48
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $49
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $4a
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $4b
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $4c
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $4d
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $4e
+	db $70,$20,$20,$20,$20,$20,$70,$00	; $49
+	db $08,$08,$08,$08,$88,$88,$70,$00	; $4a
+	db $88,$90,$a0,$c0,$a0,$90,$88,$00	; $4b
+	db $80,$80,$80,$80,$80,$80,$f8,$00	; $4c
+	db $88,$d8,$a8,$a8,$88,$88,$88,$00	; $4d
+	db $88,$88,$c8,$a8,$98,$88,$88,$00	; $4e
 	db $70,$88,$88,$88,$88,$88,$70,$00	; $4f
 
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $50
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $51
+	db $f0,$88,$88,$f0,$80,$80,$80,$00	; $50
+	db $70,$88,$88,$88,$88,$a8,$70,$08	; $51
 	db $f0,$88,$88,$f0,$a0,$90,$88,$00	; $52
 	db $78,$80,$80,$70,$08,$08,$f0,$00	; $53
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $54
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $55
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $56
+	db $f8,$20,$20,$20,$20,$20,$20,$00	; $54
+	db $88,$88,$88,$88,$88,$88,$70,$00	; $55
+	db $88,$88,$88,$88,$88,$50,$20,$00	; $56
 	db $88,$88,$88,$88,$a8,$a8,$50,$00	; $57
 
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $58
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $59
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $5a
+	db $88,$88,$50,$20,$50,$88,$88,$00	; $58
+	db $88,$88,$50,$20,$20,$20,$20,$00	; $59
+	db $f8,$08,$10,$20,$40,$80,$f8,$00	; $5a
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $5b
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $5c
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $5d
@@ -296,7 +560,7 @@ letters_bitmaps:
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $af
 
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $b0
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $b1
+	db $a8,$54,$a8,$54,$a8,$54,$a8,$54	; $b1
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $b2
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $b3
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $b4
@@ -306,9 +570,9 @@ letters_bitmaps:
 
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $b8
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $b9
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $ba
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $bb
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $bc
+	db $28,$28,$28,$28,$28,$28,$28,$28	; $ba
+	db $00,$00,$fc,$08,$e8,$28,$28,$28	; $bb
+	db $28,$28,$e8,$08,$f8,$00,$00,$00	; $bc
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $bd
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $be
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $bf
@@ -322,13 +586,13 @@ letters_bitmaps:
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $c6
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $c7
 
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $c8
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $c9
+	db $28,$28,$2c,$20,$3c,$00,$00,$00	; $c8
+	db $00,$00,$3c,$20,$2c,$28,$28,$28	; $c9
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $ca
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $cb
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $cc
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $cd
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $ce
+	db $00,$00,$fc,$00,$fc,$00,$00,$00	; $cd
+	db $28,$28,$ec,$00,$ec,$28,$28,$28	; $ce
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $cf
 
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $d0
@@ -378,7 +642,7 @@ letters_bitmaps:
 
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $f8
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $f9
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $fa
+	db $00,$00,$00,$20,$00,$00,$00,$00	; $fa
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $fb
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $fc
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $fd
@@ -391,6 +655,18 @@ letters_bitmaps:
 	; Variables del juego
 	;
 	org $e000
+
+ticks:	rb 2
+page:	rb 1
+weapon:	rb 1
+armor:	rb 1
+yendor:	rb 1
+level:	rb 1
+hp:	rb 2
+lfsr:	rb 2
+conn:	rb 2
+box_w:	rb 1
+box_h:	rb 1
 
 	org $e400
 stack:
