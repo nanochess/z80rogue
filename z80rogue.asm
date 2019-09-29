@@ -42,8 +42,18 @@ GR_FLOOR:       equ 0xfa	; Floor graphic (middle point)
 
 GR_HERO:        equ 0x01	; Hero graphic (smiling face)
 
+GR_LADDER:      equ 0xf0	; Ladder graphic
+GR_TRAP:        equ 0x04	; Trap graphic (diamond)
+GR_FOOD:        equ 0x05	; Food graphic (clover)
+GR_ARMOR:       equ 0x08	; Armor graphic (square with hole in center)
+GR_YENDOR:      equ 0x0c	; Amulet of Yendor graphic (Female sign)
+GR_GOLD:        equ 0x0f      ; Gold graphic (asterisk, like brightness)
+GR_WEAPON:      equ 0x18      ; Weapon graphic (up arrow)
+
+YENDOR_LEVEL:   equ 26		; Level of appearance for Amulet of Yendor
+
 	db $41,$42	; MSX cartridge header
-	dw inicio	; Start of game
+	dw start	; Start of game
 	dw 0
 	dw 0
 	dw 0
@@ -69,7 +79,7 @@ int_handler:
 	;
 	; Start of game
 	;
-inicio:
+start:
 	ld sp,stack
 	; Sound guaranteed to be off
 	ld hl,int_handler
@@ -82,6 +92,7 @@ inicio:
 	xor a
 	ld (level),a
 	ld (armor),a
+	ld (debounce),a
 	ld a,1
 	ld (yendor),a
 	ld (weapon),a
@@ -108,8 +119,7 @@ generate_dungeon:
 	ld l,a
 	ld (conn),hl
 
-	ld a,(page)
-	xor $04
+	ld a,$3c
 	ld (page),a
 
 	;
@@ -221,19 +231,197 @@ generate_dungeon:
 	jp nz,.7
 
 	;
+	; Put the ladder at a random corner room
+	;
+	call random
+	ld a,l
+	and $06
+	ld l,a
+	ld h,0
+	ld de,corners
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl
+	ex de,hl
+	ld a,(page)
+	add a,h
+	ld h,a
+	ld a,GR_LADDER
+	call WRTVRM
+	ex de,hl
+
+	;
+	; If the level is deep enough the put the Amulet of Vendor
+	;
+	ld a,(level)
+	cp YENDOR_LEVEL
+	jr c,.11
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl
+	ex de,hl
+	ld a,(page)
+	add a,h
+	ld h,a
+	ld a,GR_YENDOR
+	call WRTVRM
+	ex de,hl
+.11:
+	;
 	; Switch video pages
 	;
-	ld a,(page)
-	rrca
-	rrca
-	ld b,a
-	ld c,$02
-	call WRTVDP
+	ld hl,$3800
+	ld bc,23*40
+	xor a
+	call FILVRM
 
-	jr $
+	;
+	; Setup hero start
+	;
+	ld hl,19+(BOX_HEIGHT/2-1+BOX_HEIGHT)*ROW_WIDTH+$3800
+	ld (hero),hl
+game_loop:
+	ld hl,(hero)
+	ld de,-ROW_WIDTH-1
+	add hl,de
+	ld b,3
+.1:	push hl
+	call light
+	inc hl
+	call light
+	inc hl
+	call light
+	pop hl
+	ld de,ROW_WIDTH
+	add hl,de
+	djnz .1
+
+	;
+	; Show our hero
+	;
+	ld hl,(hero)
+	call RDVRM
+	push af
+	ld a,GR_HERO	
+	call WRTVRM
+	push hl
+
+	call read_stick
+	ld b,a
+
+	pop hl
+	pop af
+	call WRTVRM
+
+	ld a,b
+	cp 1
+	ld de,-40
+	jr z,.2
+	cp 3
+	ld de,1
+	jr z,.2
+	cp 5
+	ld de,40
+	jr z,.2
+	cp 7
+	ld de,-1
+	jp nz,game_loop
+.2:
+	add hl,de
+	call RDVRM
+	cp GR_LADDER
+	jp z,ladder_found
+	cp GR_DOOR
+	jp z,move_over
+	cp GR_TUNNEL	
+	jp z,move_over
+	cp GR_FLOOR
+	jp z,move_over
+
+	jp game_loop
+
+move_over:
+	ld (hero),hl
+	jp game_loop
+
+        ;
+        ;     I--
+        ;   I--
+        ; I--
+        ;
+ladder_found:
+        jp generate_dungeon
+
+	;
+	; "Light" a screen square
+	;
+light:
+	set 2,h		; Read from hidden page
+	call RDVRM
+	res 2,h		; Write to visible page
+	jp WRTVRM
+
+	;
+	; Read the stick with debouncing
+	;
+read_stick:
+	halt
+	ld a,(debounce)
+	or a
+	jr z,.1
+	dec a
+	ld (debounce),a
+	xor a
+	ret
+
+.1:	push hl
+	xor a
+	call GTSTCK	
+	pop hl
+	or a
+	jr nz,.2
+
+	push hl
+	xor a
+	call GTTRIG
+	pop hl
+	or a
+	jr z,.1
+	ld a,10
+	push af
+	ld a,10
+	ld (debounce),a
+	pop af
+	ret
+
+.2:
+	push af
+	ld a,10
+	ld (debounce),a
+	pop af
+	cp 1
+	ret z
+	cp 3
+	ret z
+	cp 5
+	ret z
+	cp 7
+	ret z
+	xor a
+	ret
 
 game_won:
 	jr $
+
+corners:
+	dw (BOX_HEIGHT/2-1)*ROW_WIDTH+(BOX_WIDTH/2)
+	dw (BOX_HEIGHT/2-1)*ROW_WIDTH+(BOX_WIDTH/2)+BOX_WIDTH*2
+	dw (BOX_HEIGHT/2-1+BOX_HEIGHT*2)*ROW_WIDTH+(BOX_WIDTH/2)
+	dw (BOX_HEIGHT/2-1+BOX_HEIGHT*2)*ROW_WIDTH+(BOX_WIDTH/2)+BOX_WIDTH*2
+	dw (BOX_HEIGHT/2-1)*ROW_WIDTH+(BOX_WIDTH/2)
 
 	;
 	; Fill a row on screen for a room
@@ -365,19 +553,19 @@ letters_bitmaps:
 	db $78,$fc,$b4,$fc,$fc,$b4,$84,$78	; $01 - Happy face
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $02
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $03
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $04
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $05
+	db $00,$20,$70,$f8,$70,$20,$00,$00	; $04
+	db $30,$30,$cc,$cc,$30,$20,$f8,$00	; $05
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $06
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $07
 
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $08
+	db $fc,$fc,$ec,$c4,$c4,$ec,$fc,$fc	; $08
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $09
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $0a
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $0b
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $0c
+	db $70,$88,$70,$20,$f8,$20,$20,$00	; $0c
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $0d
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $0e
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $0f
+	db $20,$30,$48,$cc,$48,$cc,$30,$20	; $0f
 
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $10
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $11
@@ -388,7 +576,7 @@ letters_bitmaps:
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $16
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $17
 
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $18
+	db $20,$38,$20,$20,$20,$20,$20,$00	; $18
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $19
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $1a
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $1b
@@ -571,7 +759,7 @@ letters_bitmaps:
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $b8
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $b9
 	db $28,$28,$28,$28,$28,$28,$28,$28	; $ba
-	db $00,$00,$fc,$08,$e8,$28,$28,$28	; $bb
+	db $00,$00,$f8,$08,$e8,$28,$28,$28	; $bb
 	db $28,$28,$e8,$08,$f8,$00,$00,$00	; $bc
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $bd
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $be
@@ -631,7 +819,7 @@ letters_bitmaps:
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $ee
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $ef
 
-	db $00,$00,$00,$00,$00,$00,$00,$00	; $f0
+	db $fc,$84,$fc,$84,$fc,$84,$fc,$fc	; $f0
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $f1
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $f2
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $f3
@@ -667,6 +855,8 @@ lfsr:	rb 2
 conn:	rb 2
 box_w:	rb 1
 box_h:	rb 1
+hero:	rb 2
+debounce: rb 1
 
 	org $e400
 stack:
