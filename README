@@ -1,11 +1,52 @@
+      |  _  |  _  |                           
+   ____\ V /| |/' |_ __ ___   __ _ _   _  ___ 
+  |_  // _ \|  /| | '__/ _ \ / _` | | | |/ _ \
+   / /| |_| \ |_/ / | | (_) | (_| | |_| |  __/
+  /___\_____/\___/|_|  \___/ \__, |\__,_|\___|
+  \            A_________     __/ |          /           
+   \        )==o_________>   |___/          /
+    \__________V___________________________/
+
 z80rogue, a roguelike game for MSX.
 by Oscar Toledo G. Sep/29/2019.
+
+http://nanochess.org
+https://github.com/nanochess/z80rogue
 
 To assemble it:
 
     tniasm rogue.asm
 
-Navigate rooms using cursor keys (up+down+left+right), currently you cannot
-take anything nor battle.
+>> HOW TO PLAY <<
 
-Just starting...
+Move with the arrow keys to reveal the area where you are.
+Any action is done by touching the target.
+
+Any letter is a monster, the Aardvark monster is the most
+easiest of the game, while the Zombie master monster is the
+most difficult one. Touching them will cause a battle to
+start, press any key to keep advancing the battle and see
+how your HP goes down.
+
+The diamonds are traps that will suck your HP.
+
+The clover symbol is food. The square with a hole in the
+center is armor, getting more of these means the monsters
+will have a hard time hitting you. The up arrow is weapon,
+getting more of these means the monsters will receive harder
+hits.
+
+The asterisk like symbol is gold, but doesn't affect the
+gameplay nor is counted (because lack of space), but I wanted
+to have gold in the game ;)
+
+Finally the Amulet of Yendor is represented by a Female sign,
+and it will appear only in level 26 or deeper. Once you get
+the amulet, the ladders will start taking you to upper levels.
+
+The game will get stuck once you lose all your HP or take the
+last ladder to surface.
+
+Enjoy it!
+
+

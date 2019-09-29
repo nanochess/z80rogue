@@ -309,6 +309,8 @@ game_loop:
 	call WRTVRM
 	push hl
 
+	call update_hp
+
 	call read_stick
 	ld b,a
 
@@ -336,16 +338,226 @@ game_loop:
 	jp z,ladder_found
 	cp GR_DOOR
 	jp z,move_over
-	cp GR_TUNNEL	
-	jp z,move_over
 	cp GR_FLOOR
 	jp z,move_over
+	cp GR_TUNNEL	
+	jp z,move_over
+	jp nc,move_cancel
+	cp GR_TRAP
+	jp z,trap_found
+	jp c,move_cancel
 
+	cp GR_WEAPON+1
+	jp nc,battle
+
+	push af
+	ld a,GR_FLOOR
+	call WRTVRM
+	set 2,h
+	call WRTVRM
+	res 2,h
+	pop af
+	cp GR_WEAPON
+	jp z,weapon_found
+	cp GR_ARMOR
+	jp z,armor_found
+	cp GR_FOOD
+	jp z,food_found
+	cp GR_GOLD
+	jp z,gold_found
+	cp GR_YENDOR
+	jp z,amulet_found
+
+move_cancel:
 	jp game_loop
 
 move_over:
 	ld (hero),hl
 	jp game_loop
+
+	;
+	; Amulet of Yendor found!
+	;
+amulet_found:
+	ld a,$ff
+	ld (yendor),a
+	jp move_over
+
+        ; ______
+        ; I    I
+        ; I #X I
+        ; I X# I
+        ;  \__/
+        ;   
+armor_found:
+	ld a,(armor)
+	inc a		; Increase armor level
+	ld (armor),a
+	jp move_over
+
+        ;
+        ;       /| _____________
+        ; (|===|oo>_____________>
+        ;       \|
+        ;
+weapon_found:
+	ld a,(weapon)
+	inc a		; Increase weapon level
+	ld (weapon),a
+	jp move_over
+
+gold_found:
+	jp move_over
+
+        ;
+        ;     /--\
+        ; ====    I
+        ;     \--/
+        ;
+food_found:
+	push hl
+	call random
+	ld a,l
+	pop hl
+.1:	sub 6
+	jr nc,.1
+	add a,7
+	push hl
+	ld l,a
+	ld h,0
+	call add_hp
+	pop hl
+	jp move_over
+
+	;
+	; Aaaargghhhhhh!
+	;
+trap_found:
+	push hl
+	call random
+	ld a,l
+	pop hl
+.1:	sub 6
+	jr nc,.1
+	add a,7
+	neg 
+	push hl
+	ld l,a
+	ld h,$ff
+	call add_hp
+	pop hl
+	jp move_over
+
+	;
+	; Let's battle!!!
+	;
+battle:
+	push hl
+	and $1f
+	add a,a
+	ld l,a
+	ld h,0
+	ld (monster_hp),hl
+	ld (attack),a
+	; Player's attack
+.1:	call random
+	ld a,(weapon)
+	ld b,a
+	ld a,l
+.2:	sub b
+	jr nc,.2
+	add a,b
+	ld e,a
+	ld d,0
+	inc de
+	ld hl,(monster_hp)
+	or a
+	sbc hl,de
+	ld (monster_hp),hl
+	jp c,.3
+
+	call random
+	ld a,(armor)
+	ld c,a
+	ld a,(attack)
+	ld b,a
+	ld a,l
+.4:	sub b
+	jr nc,.4
+	add a,b
+	inc a
+	sub c
+	jr c,.5
+	or a
+	jr z,.5
+	neg
+	ld l,a
+	ld h,$ff
+	call add_hp
+	call update_hp
+.5:
+	call read_stick
+	jp .1
+
+.3:	pop hl
+	;
+	; Remove monster from screen
+	;
+	ld a,GR_FLOOR
+	call WRTVRM
+	set 2,h
+	call WRTVRM
+	res 2,h
+	jp move_over
+
+add_hp:
+	ex de,hl
+	ld hl,(hp)
+	add hl,de
+	ld (hp),hl
+	ld a,h
+	or l
+	jr z,.1
+	bit 7,h
+	ret z
+.1:
+	;
+	; Player is dead
+	;
+	jr $
+
+	;
+	; Update HP on screen
+	;
+update_hp:
+	ld hl,$3800+23*ROW_WIDTH+38
+	exx
+	ld hl,(hp)
+	exx
+
+.2:	exx
+	ld de,10
+	ld bc,-1
+
+.1:	inc bc
+	or a
+	sbc hl,de
+	jr nc,.1
+	add hl,de
+	ld a,l
+	add a,$30
+	exx
+	call WRTVRM
+	dec hl
+	exx
+	ld h,b
+	ld l,c
+	ld a,b
+	or c
+	exx
+	jp nz,.2
+	ld a,$20
+	jp WRTVRM
 
         ;
         ;     I--
@@ -374,8 +586,7 @@ read_stick:
 	jr z,.1
 	dec a
 	ld (debounce),a
-	xor a
-	ret
+	jr read_stick
 
 .1:	push hl
 	xor a
@@ -389,7 +600,7 @@ read_stick:
 	call GTTRIG
 	pop hl
 	or a
-	jr z,.1
+	jr z,read_stick
 	ld a,10
 	push af
 	ld a,10
@@ -908,6 +1119,8 @@ box_w:	rb 1
 box_h:	rb 1
 hero:	rb 2
 debounce: rb 1
+monster_hp:	rb 2
+attack:	rb 1
 
 	org $e400
 stack:
