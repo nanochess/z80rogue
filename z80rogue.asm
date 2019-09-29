@@ -1267,9 +1267,9 @@ announce_player_hit:
 
 move_monsters:
 	push hl
+	set 2,h
 	ld de,-ROW_WIDTH*2-2
 	add hl,de
-	set 2,h
 	ld de,temp
 	ld b,5
 .1:	push bc
@@ -1368,9 +1368,9 @@ move_monsters:
 
 	pop hl
 	push hl
+	set 2,h
 	ld de,-82
 	add hl,de
-	set 2,h
 	ld de,temp
 	ld b,5
 .3:	push bc
@@ -1383,6 +1383,8 @@ move_monsters:
 	or a
 	jr z,.5
 	ld a,(de)
+	or a
+	jr z,.5
 	call WRTVRM
 .5:
 	set 2,h
