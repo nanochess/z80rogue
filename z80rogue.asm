@@ -1,5 +1,5 @@
 	;
-	; z80rogue for MSX/Colecovision
+	; z80rogue for MSX/Colecovision/Memotech
 	;
 	; by Óscar Toledo Gutiérrez
 	;
@@ -8,10 +8,43 @@
 	; Creation date: Sep/29/2019.
 	;
 
-	fname "z80rogue.rom"
+	;
+	; Define all to zero, put to one your desired target
+	;
+COLECO:		equ 1		; Colecovision consoles
 
-COLECO:	equ 0
-MSX: 	equ 1
+MSX: 		equ 0		; MSX computers
+
+MEMOTECH:	equ 0		; Memotech computers
+	CPM:		equ 0	; If MEMOTECH is defined, define to 1 for CP/M
+
+    if COLECO
+	fname "roguecv.rom"
+    endif
+    if MSX
+	fname "roguemsx.rom"
+    endif
+    if MEMOTECH
+      if CPM=1
+	fname "roguemt.com"
+	org $0100
+      else
+	fname "roguemt.run"
+	org $40fc
+
+	dw rom_start
+	dw rom_end-rom_start
+      endif
+    endif
+
+    if COLECO+MEMOTECH
+VDP:	equ $be*COLECO+$01*MEMOTECH
+PSG:	equ $ff*COLECO+$06*MEMOTECH
+CTC:	equ            $08*MEMOTECH
+KEYSEL:	equ $80*COLECO+$05*MEMOTECH
+KEY1:	equ            $05*MEMOTECH
+KEY2:	equ            $06*MEMOTECH
+    endif
 
     if COLECO
 	org $8000,$bfff
@@ -32,12 +65,9 @@ MSX: 	equ 1
 
 	jp nmi_vector
 
-VDP:	equ $be
-KEYSEL:	equ $80
 JOYSEL:	equ $C0
 JOY1:	equ $fc
 JOY2:	equ $ff
-PSG:	equ $ff
     endif
 
     if MSX
@@ -54,7 +84,22 @@ VDP.DW:	equ $0007	; Memory location with port number for VDP data write
 
     endif
 
-    if COLECO
+    if MEMOTECH
+rom_start:
+	jp start
+
+	db 0,0,0,0,0
+	dw int_vector
+	dw null_vector
+	dw null_vector
+	dw rom_start
+
+null_vector:
+	ei
+	reti
+    endif
+
+    if COLECO+MEMOTECH
 SETRD:
 	call nmi_off
 	ld a,l
@@ -78,7 +123,7 @@ WRTVDP:
     if MSX
 	jp $0047
     endif
-    if COLECO
+    if COLECO+MEMOTECH
 	call nmi_off
 	ld a,b
 	out (VDP+1),a
@@ -92,7 +137,7 @@ RDVRM:
     if MSX
 	jp $004a
     endif
-    if COLECO
+    if COLECO+MEMOTECH
 	call SETRD
 	ex (sp),hl
 	ex (sp),hl
@@ -105,7 +150,7 @@ WRTVRM:
     if MSX
 	jp $004d
     endif
-    if COLECO
+    if COLECO+MEMOTECH
 	push af
 	call SETWRT
 	ex (sp),hl
@@ -119,7 +164,7 @@ FILVRM:
     if MSX
 	jp $0056
     endif
-    if COLECO
+    if COLECO+MEMOTECH
 	push af
 	call SETWRT
 	ex (sp),hl
@@ -139,7 +184,7 @@ LDIRVM:
     if MSX
 	jp $005c
     endif
-    if COLECO
+    if COLECO+MEMOTECH
 	ex de,hl
 	call SETWRT
 	ex (sp),hl
@@ -173,7 +218,56 @@ GTSTCK:
 	add hl,de
 	ld a,(hl)
 	ret
+    endif
+    if MEMOTECH
+	ld b,$ff
+	ld a,$fb
+	out (KEYSEL),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(KEY1)
+	bit 7,a		; Up arrow
+	jr nz,$+4
+	res 0,b
 
+	ld a,$ef
+	out (KEYSEL),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(KEY1)
+	bit 7,a		; Right arrow
+	jr nz,$+4
+	res 1,b
+
+	ld a,$bf
+	out (KEYSEL),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(KEY1)
+	bit 7,a		; Down arrow
+	jr nz,$+4
+	res 2,b
+
+	ld a,$f7
+	out (KEYSEL),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(KEY1)
+	bit 7,a		; Left arrow
+	jr nz,$+4
+	res 3,b
+
+	ld a,b
+	and $0f
+	ld e,a
+	ld d,0
+	ld hl,.1
+	add hl,de
+	ld a,(hl)
+	ret
+    endif
+
+    if COLECO+MEMOTECH
 .1:
         db 0,0,0,6,0,0,8,7,0,4,0,5,2,3,1,0
     endif
@@ -192,6 +286,18 @@ GTTRIG:
 	and b
 	cpl
 	and $40
+	ret z
+	ld a,$ff
+	ret
+    endif
+    if MEMOTECH
+	ld a,$df
+	out (KEYSEL),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(KEY1)
+	cpl
+	and $80		; Home key
 	ret z
 	ld a,$ff
 	ret
@@ -226,15 +332,21 @@ GR_WEAPON:      equ 0x18      ; Weapon graphic (up arrow)
 
 YENDOR_LEVEL:   equ 26		; Level of appearance for Amulet of Yendor
 
-    if COLECO
 nmi_off:
+    if COLECO
 	push hl
 	ld hl,nmi_data
 	set 0,(hl)
 	pop hl
 	ret
+    endif
+    if MEMOTECH
+	di
+	ret
+    endif
 
 nmi_on:
+    if COLECO
 	push hl
 	ld hl,nmi_data
 	res 0,(hl)
@@ -247,7 +359,13 @@ nmi_on:
 	ld hl,nmi_data
 	res 1,(hl)
 	jp nmi_vector.1
+    endif
+    if MEMOTECH
+	ei
+	ret
+    endif
 
+    if COLECO
 nmi_vector:
 	push af
 	push hl
@@ -268,6 +386,20 @@ nmi_vector:
 	pop af
 	retn
     endif
+    if MEMOTECH
+int_vector:
+	push af
+	push hl
+	push bc
+	push de
+	call int_handler
+	pop de
+	pop bc
+	pop hl
+	pop af
+	ei
+	reti
+    endif
 
 	;
 	; Interruption handler
@@ -279,7 +411,7 @@ int_handler:
 	inc c
 	in a,(c)
     endif
-    if COLECO
+    if COLECO+MEMOTECH
 	in a,(VDP+1)
     endif
 
@@ -331,6 +463,64 @@ start:
 	out (PSG),a
 	ld a,$ff
 	out (PSG),a
+
+    endif
+    if MEMOTECH
+	ld a,rom_start>>8
+	ld i,a
+
+	ld a,$03	; Reset Z80 CTC
+	out (CTC+0),a
+	out (CTC+1),a
+	out (CTC+2),a
+	out (CTC+3),a
+	out (CTC+0),a
+	out (CTC+1),a
+	out (CTC+2),a
+	out (CTC+3),a
+
+	ld a,$08
+	out (CTC+0),a
+
+	ld a,$25
+	out (CTC+2),a
+	ld a,$9c
+	out (CTC+2),a
+	ld a,$25
+	out (CTC+1),a
+	ld a,$9c
+	out (CTC+1),a
+	ld a,$c5
+	out (CTC+0),a
+	ld a,$01
+	out (CTC+0),a
+	in a,(VDP+1)
+	ld hl,.1
+	push hl
+	ei
+	reti
+.1:
+	ld a,$9f
+	out (PSG),a
+	in a,(3)
+	ex (sp),hl
+	ex (sp),hl
+	ld a,$bf
+	out (PSG),a
+	in a,(3)
+	ex (sp),hl
+	ex (sp),hl
+	ld a,$df
+	out (PSG),a
+	in a,(3)
+	ex (sp),hl
+	ex (sp),hl
+	ld a,$ff
+	out (PSG),a
+	in a,(3)
+	ex (sp),hl
+	ex (sp),hl
+
 
     endif
 
@@ -1196,6 +1386,13 @@ title_letters:
     if COLECO
 	db "          Colecovision version          "
     endif
+    if MEMOTECH
+      if CPM
+	db "         Memotech version (CP/M)        "
+      else
+	db "            Memotech version            "
+      endif
+    endif
 
 	db "                                        "
 	db "                                        "
@@ -1205,6 +1402,9 @@ title_letters:
     endif
     if COLECO
 	db "         Press button to start          "
+    endif
+    if MEMOTECH
+	db "          Press Home to start           "
     endif
 
 letters_bitmaps:
@@ -1496,11 +1696,20 @@ letters_bitmaps:
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $fe
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $ff
 
+rom_end:
+
     if MSX
 	ds $6000-$,$ff
     endif
     if COLECO
        ds $a000-$,$ff
+    endif
+    if MEMOTECH
+      if CPM=1
+        ds $80-($ and $7f),$00
+      else
+        ds $80-(($+4) and $7f),$00
+      endif
     endif
 
 	;
@@ -1511,6 +1720,13 @@ letters_bitmaps:
     endif
     if COLECO
 	org $7000
+    endif
+    if MEMOTECH
+      if CPM=1
+        org $2100
+      else
+        org $6100
+      endif
     endif
 
     if COLECO
@@ -1538,5 +1754,12 @@ first:	rb 1
     endif
     if COLECO
 	org $7400
+    endif
+    if MEMOTECH
+      if CPM=1
+        org $2500
+      else
+        org $6500
+      endif
     endif
 stack:

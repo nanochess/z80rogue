@@ -7,7 +7,7 @@
    \        )==o_________>   |___/          /
     \__________V___________________________/
 
-z80rogue, a roguelike game for MSX/Colecovision.
+z80rogue, a roguelike game for MSX/Colecovision/Memotech
 by Oscar Toledo G. Sep/29/2019.
 
 http://nanochess.org
@@ -17,17 +17,20 @@ You need tniASM v0.44 to assemble it:
 
     tniasm rogue.asm
 
-You can edit internally the definitions for assembly for MSX
-or Colecovision (put one to your selected platform, and zero
-for all others).
+You can edit internally the definitions for assembly for MSX,
+Colecovision, or Memotech (put 1 to your selected platform,
+and zero for all others).
 
+It should be easily portable to any computer/console with
+Z80 CPU and TMS9928 video processor.
+ 
 This is an almost direct port of my game bootRogue.
 
 
 >> HOW TO PLAY <<
 
-Move with the arrow keys to reveal the area where you are.
-Any action is done by touching the target.
+Move with the arrow keys or joystick to reveal the area
+where you are. Any action is done by touching the target.
 
 Any letter is a monster, the Aardvark monster is the most
 easiest of the game, while the Zombie master monster is the
@@ -44,15 +47,14 @@ getting more of these means the monsters will receive harder
 hits.
 
 The asterisk like symbol is gold, but doesn't affect the
-gameplay nor is counted (because lack of space), but I wanted
-to have gold in the game ;)
+gameplay nor is counted, but I wanted to have gold in the game ;)
 
 Finally the Amulet of Yendor is represented by a Female sign,
 and it will appear only in level 26 or deeper. Once you get
 the amulet, the ladders will start taking you to upper levels.
 
-The game will get stuck once you lose all your HP or take the
-last ladder to surface.
+The game will stop once you lose all your HP or take the last
+ladder to surface.
 
 Enjoy it!
 
