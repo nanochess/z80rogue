@@ -5,6 +5,7 @@ To assemble it:
 
     tniasm rogue.asm
 
-Currently it only draws rooms.
+Navigate rooms using cursor keys (up+down+left+right), currently you cannot
+take anything nor battle.
 
 Just starting...
