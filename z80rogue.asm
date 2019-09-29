@@ -89,15 +89,55 @@ start:
 
 	call vdp_mode_0
 
+title_screen:
+	ld hl,$3800
+	ld bc,$0400
+	xor a
+	call FILVRM
+
+	ld a,30
+	ld (debounce),a
+
+	ld hl,title_letters
+	ld de,$3800+5*40
+	ld bc,14*40
+	call LDIRVM
+
+	ld b,5
+.1:	push bc
+	ld bc,$a107
+	call WRTVDP
+	halt
+	ld bc,$b107
+	call WRTVDP
+	halt
+	ld bc,$f107
+	call WRTVDP
+	halt
+	ld bc,$b107
+	call WRTVDP
+	halt
+	ld bc,$a107
+	call WRTVDP
+	halt
+	ld bc,$5107
+	call WRTVDP
+	halt
+	pop bc
+	djnz .1
+
+	call read_stick
+
 	xor a
 	ld (level),a
 	ld (armor),a
-	ld (debounce),a
 	ld a,1
 	ld (yendor),a
 	ld (weapon),a
 	ld hl,16
 	ld (hp),hl
+	ld a,1
+	ld (first),a
 
 generate_dungeon:
 	ld a,(yendor)
@@ -107,6 +147,8 @@ generate_dungeon:
 	ld (level),a
 	or a
 	jp z,game_won
+
+	call update_level
 
 	ld hl,(lfsr)
 	ld a,h
@@ -179,7 +221,7 @@ generate_dungeon:
 	jr nc,.9
 	add a,BOX_MAX_HEIGHT-1
 	ld (box_h),a
-	and $fe
+	srl a
 	ld l,a
 	ld h,0
 	add hl,hl	; x2
@@ -277,6 +319,8 @@ generate_dungeon:
 	ld bc,23*40
 	xor a
 	call FILVRM
+	ld bc,$2107
+	call WRTVDP
 
 	;
 	; Setup hero start
@@ -310,6 +354,10 @@ game_loop:
 	push hl
 
 	call update_hp
+
+	ld a,(first)
+	or a
+	call nz,welcome
 
 	call read_stick
 	ld b,a
@@ -524,7 +572,50 @@ add_hp:
 	;
 	; Player is dead
 	;
-	jr $
+	ld hl,.2
+	call show_message
+	ld b,120
+	halt
+	djnz $-1
+
+	call read_stick
+	jp title_screen
+
+.2:
+	db "You are dead!",0
+
+	;
+	; Show message
+	;
+show_message:
+	ld de,$3800
+.1:	ld a,(hl)
+	or a
+	ret z
+	ex de,hl
+	call WRTVRM
+	ex de,hl
+	inc de
+	inc hl
+	jr .1
+
+	;
+	; Update Level on screen
+	;
+update_level:
+	ld hl,.1
+	ld de,$3800+23*ROW_WIDTH+1
+	ld bc,7
+	call LDIRVM
+	ld hl,$3800+23*ROW_WIDTH+10
+	exx
+	ld a,(level)
+	ld l,a
+	ld h,0
+	exx
+	jp show_number
+
+.1:	db "Level: "
 
 	;
 	; Update HP on screen
@@ -534,6 +625,9 @@ update_hp:
 	exx
 	ld hl,(hp)
 	exx
+	jp show_number
+
+show_number:
 
 .2:	exx
 	ld de,10
@@ -625,7 +719,31 @@ read_stick:
 	ret
 
 game_won:
-	jr $
+	ld hl,.1
+	call show_message
+	ld b,120
+	halt
+	djnz $-1
+
+	call read_stick
+	jp title_screen
+
+.1:
+	db "You have made it to the surface!",0
+
+welcome:
+	xor a
+	ld (first),a
+	ld hl,.1
+	call show_message
+	call read_stick
+	ld hl,$3800
+	ld bc,32
+	xor a
+	jp FILVRM
+
+.1:
+	db "Welcome to the dungeons of doom!",0
 
 corners:
 	dw (BOX_HEIGHT/2-1)*ROW_WIDTH+(BOX_WIDTH/2)
@@ -809,6 +927,22 @@ random:
 
 test:
 	db "OSCAR WAS HERE ",$01
+
+title_letters:
+	db "     _______                            "
+	db "    | _ | _ |                           "
+	db "  ___\V/||/'|_ __ ___   __ _ _   _  ___ "
+	db " |_ //_\| /|| '__/ _ \ / _` | | | |/ _ \"
+	db "  //||_|\|_// | | (_) | (_| | |_| |  __/"
+	db " /__\___/\_/|_|  \___/ \__, |\__,_|\___|"
+	db " \        A________     __/ |          /"          
+	db "  \    )==o________>   |___/          / "
+	db "   \______V__________________________/  "
+	db "                                        "
+	db "           by Oscar Toledo G.           "
+	db "                                        "
+	db "                                        "
+	db "          Press Space to start          "
 
 letters_bitmaps:
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $00
@@ -1121,6 +1255,7 @@ hero:	rb 2
 debounce: rb 1
 monster_hp:	rb 2
 attack:	rb 1
+first:	rb 1
 
 	org $e400
 stack:

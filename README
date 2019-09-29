@@ -17,6 +17,9 @@ To assemble it:
 
     tniasm rogue.asm
 
+This is an almost direct port of my game bootRogue.
+
+
 >> HOW TO PLAY <<
 
 Move with the arrow keys to reveal the area where you are.
