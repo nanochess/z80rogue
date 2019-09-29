@@ -7,15 +7,19 @@
    \        )==o_________>   |___/          /
     \__________V___________________________/
 
-z80rogue, a roguelike game for MSX.
+z80rogue, a roguelike game for MSX/Colecovision.
 by Oscar Toledo G. Sep/29/2019.
 
 http://nanochess.org
 https://github.com/nanochess/z80rogue
 
-To assemble it:
+You need tniASM v0.44 to assemble it:
 
     tniasm rogue.asm
+
+You can edit internally the definitions for assembly for MSX
+or Colecovision (put one to your selected platform, and zero
+for all others).
 
 This is an almost direct port of my game bootRogue.
 

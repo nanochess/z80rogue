@@ -1,27 +1,201 @@
 	;
-	; z80rogue para MSX
+	; z80rogue for MSX/Colecovision
 	;
-	; por Óscar Toledo Gutiérrez
+	; by Óscar Toledo Gutiérrez
 	;
 	; (c) Copyright 2019 Óscar Toledo Gutiérrez
 	;
-	; Creación: 29-sep-2019.
+	; Creation date: Sep/29/2019.
 	;
 
 	fname "z80rogue.rom"
 
+COLECO:	equ 0
+MSX: 	equ 1
+
+    if COLECO
+	org $8000,$bfff
+	db $55,$aa	; Colecovision cartridge header (no Coleco logo)
+	dw $0000
+	dw $0000
+	dw $0000
+	dw $0000
+	dw start	; Start of game
+
+	jp 0		; rst $08
+	jp 0		; rst $10
+	jp 0		; rst $18
+	jp 0		; rst $20
+	jp 0		; rst $28
+	jp 0		; rst $30
+	jp 0		; rst $38
+
+	jp nmi_vector
+
+VDP:	equ $be
+KEYSEL:	equ $80
+JOYSEL:	equ $C0
+JOY1:	equ $fc
+JOY2:	equ $ff
+PSG:	equ $ff
+    endif
+
+    if MSX
 	org $4000,$7fff
+
+	db $41,$42	; MSX cartridge header
+	dw start	; Start of game
+	dw 0
+	dw 0
+	dw 0
 
 VDP.DR:	equ $0006	; Memory location with port number for VDP data read
 VDP.DW:	equ $0007	; Memory location with port number for VDP data write
 
-WRTVDP:	equ $0047
-RDVRM:	equ $004a
-WRTVRM:	equ $004d
-FILVRM:	equ $0056
-LDIRVM:	equ $005c
-GTSTCK:	equ $00d5
-GTTRIG:	equ $00d8
+    endif
+
+    if COLECO
+SETRD:
+	call nmi_off
+	ld a,l
+	out (VDP+1),a
+	ld a,h
+	and $3f
+	out (VDP+1),a
+	jp nmi_on
+
+SETWRT:
+	call nmi_off
+	ld a,l
+	out (VDP+1),a
+	ld a,h
+	or $40
+	out (VDP+1),a
+	jp nmi_on
+    endif
+
+WRTVDP:
+    if MSX
+	jp $0047
+    endif
+    if COLECO
+	call nmi_off
+	ld a,b
+	out (VDP+1),a
+	ld a,c
+	or $80
+	out (VDP+1),a
+	jp nmi_on
+    endif
+
+RDVRM:
+    if MSX
+	jp $004a
+    endif
+    if COLECO
+	call SETRD
+	ex (sp),hl
+	ex (sp),hl
+	nop
+	in a,(VDP)
+	ret
+    endif
+
+WRTVRM:
+    if MSX
+	jp $004d
+    endif
+    if COLECO
+	push af
+	call SETWRT
+	ex (sp),hl
+	ex (sp),hl
+	pop af
+	out (VDP),a
+	ret
+    endif
+
+FILVRM:
+    if MSX
+	jp $0056
+    endif
+    if COLECO
+	push af
+	call SETWRT
+	ex (sp),hl
+	ex (sp),hl
+.1:	pop af
+	out (VDP),a
+	push af
+	dec bc
+	ld a,b
+	or c
+	jp nz,.1
+	pop af
+	ret
+    endif
+
+LDIRVM:
+    if MSX
+	jp $005c
+    endif
+    if COLECO
+	ex de,hl
+	call SETWRT
+	ex (sp),hl
+	ex (sp),hl
+.1:	ld a,(de)
+	out (VDP),a
+	inc de
+	dec bc
+	ld a,b
+	or c
+	jr nz,.1
+	ret
+    endif
+
+GTSTCK:
+    if MSX
+	jp $00d5
+    endif
+    if COLECO
+	out (JOYSEL),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(JOY1)
+	ld b,a
+	in a,(JOY2)
+	and b
+	and $0f
+	ld e,a
+	ld d,0
+	ld hl,.1
+	add hl,de
+	ld a,(hl)
+	ret
+
+.1:
+        db 0,0,0,6,0,0,8,7,0,4,0,5,2,3,1,0
+    endif
+
+GTTRIG:
+    if MSX
+	jp $00d8
+    endif
+    if COLECO
+	out (JOYSEL),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(JOY1)
+	ld b,a
+	in a,(JOY2)
+	and b
+	cpl
+	and $40
+	ret z
+	ld a,$ff
+	ret
+    endif
 
 ROW_WIDTH:      equ 40		; Width in bytes of each video row
 BOX_MAX_WIDTH:  equ 11		; Max width of a room box
@@ -52,20 +226,62 @@ GR_WEAPON:      equ 0x18      ; Weapon graphic (up arrow)
 
 YENDOR_LEVEL:   equ 26		; Level of appearance for Amulet of Yendor
 
-	db $41,$42	; MSX cartridge header
-	dw start	; Start of game
-	dw 0
-	dw 0
-	dw 0
+    if COLECO
+nmi_off:
+	push hl
+	ld hl,nmi_data
+	set 0,(hl)
+	pop hl
+	ret
+
+nmi_on:
+	push hl
+	ld hl,nmi_data
+	res 0,(hl)
+	nop
+	bit 1,(hl)
+	pop hl
+	ret z
+	push af
+	push hl
+	ld hl,nmi_data
+	res 1,(hl)
+	jp nmi_vector.1
+
+nmi_vector:
+	push af
+	push hl
+	ld hl,nmi_data
+	bit 0,(hl)
+	jr z,.1
+	set 1,(hl)
+	pop hl
+	pop af
+	retn
+
+.1:	push bc
+	push de
+	call int_handler
+	pop de
+	pop bc
+	pop hl
+	pop af
+	retn
+    endif
 
 	;
 	; Interruption handler
 	;
 int_handler:
+    if MSX
 	ld a,(VDP.DR)
 	ld c,a
 	inc c
 	in a,(c)
+    endif
+    if COLECO
+	in a,(VDP+1)
+    endif
 
 	ld hl,(ticks)
 	inc hl
@@ -80,12 +296,43 @@ int_handler:
 	; Start of game
 	;
 start:
+    if MSX
 	ld sp,stack
 	; Sound guaranteed to be off
 	ld hl,int_handler
 	ld ($fd9b),hl
 	ld a,$c3
 	ld ($fd9a),a
+    endif
+    if COLECO
+	di
+	ld sp,stack
+
+	xor a
+	ld (nmi_data),a
+
+	in a,(VDP+1)
+	ld a,$82
+	out (VDP+1),a
+	ld a,$81
+	out (VDP+1),a
+
+	in a,(VDP+1)
+	ld a,$82
+	out (VDP+1),a
+	ld a,$81
+	out (VDP+1),a
+
+	ld a,$9f
+	out (PSG),a
+	ld a,$bf
+	out (PSG),a
+	ld a,$df
+	out (PSG),a
+	ld a,$ff
+	out (PSG),a
+
+    endif
 
 	call vdp_mode_0
 
@@ -100,7 +347,7 @@ title_screen:
 
 	ld hl,title_letters
 	ld de,$3800+5*40
-	ld bc,14*40
+	ld bc,18*40
 	call LDIRVM
 
 	ld b,5
@@ -942,7 +1189,23 @@ title_letters:
 	db "           by Oscar Toledo G.           "
 	db "                                        "
 	db "                                        "
+
+    if MSX
+	db "              MSX version               "
+    endif
+    if COLECO
+	db "          Colecovision version          "
+    endif
+
+	db "                                        "
+	db "                                        "
+	db "                                        "
+    if MSX
 	db "          Press Space to start          "
+    endif
+    if COLECO
+	db "         Press button to start          "
+    endif
 
 letters_bitmaps:
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $00
@@ -1233,13 +1496,26 @@ letters_bitmaps:
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $fe
 	db $00,$00,$00,$00,$00,$00,$00,$00	; $ff
 
-	ds $8000-$,$ff
+    if MSX
+	ds $6000-$,$ff
+    endif
+    if COLECO
+       ds $a000-$,$ff
+    endif
 
 	;
 	; Variables del juego
 	;
+    if MSX
 	org $e000
+    endif
+    if COLECO
+	org $7000
+    endif
 
+    if COLECO
+nmi_data:	rb 1
+    endif
 ticks:	rb 2
 page:	rb 1
 weapon:	rb 1
@@ -1257,5 +1533,10 @@ monster_hp:	rb 2
 attack:	rb 1
 first:	rb 1
 
+    if MSX
 	org $e400
+    endif
+    if COLECO
+	org $7400
+    endif
 stack:
