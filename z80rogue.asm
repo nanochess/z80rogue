@@ -781,6 +781,12 @@ game_loop:
 	djnz .1
 
 	;
+	; Approximate monsters around
+	;
+	ld hl,(hero)
+	call move_monsters
+
+	;
 	; Show our hero
 	;
 	ld hl,(hero)
@@ -1258,6 +1264,165 @@ announce_player_hit:
 .m6:	db "You hit the ",0
 .m7:	db "You have injured the ",0
 .m8:	db "You swing and hit the ",0
+
+move_monsters:
+	push hl
+	ld de,-ROW_WIDTH*2-2
+	add hl,de
+	set 2,h
+	ld de,temp
+	ld b,5
+.1:	push bc
+	push hl
+	ld b,5
+.2:	call RDVRM
+	ld (de),a
+	inc de
+	inc hl
+	djnz .2
+	pop hl
+	ld bc,ROW_WIDTH
+	add hl,bc
+	pop bc
+	djnz .1
+
+	ld hl,temp
+	ld de,temp+6
+	call move_monster
+	ld hl,temp+1
+	ld de,temp+6
+	call move_monster
+	ld hl,temp+5
+	ld de,temp+6
+	call move_monster
+
+	ld hl,temp+1
+	ld de,temp+7
+	call move_monster
+	ld hl,temp+2
+	ld de,temp+7
+	call move_monster
+	ld hl,temp+3
+	ld de,temp+7
+	call move_monster
+
+	ld hl,temp+3
+	ld de,temp+8
+	call move_monster
+	ld hl,temp+4
+	ld de,temp+8
+	call move_monster
+	ld hl,temp+9
+	ld de,temp+8
+	call move_monster
+
+	ld hl,temp+5
+	ld de,temp+11
+	call move_monster
+	ld hl,temp+10
+	ld de,temp+11
+	call move_monster
+	ld hl,temp+15
+	ld de,temp+11
+	call move_monster
+
+	ld hl,temp+9
+	ld de,temp+13
+	call move_monster
+	ld hl,temp+14
+	ld de,temp+13
+	call move_monster
+	ld hl,temp+19
+	ld de,temp+13
+	call move_monster
+
+	ld hl,temp+15
+	ld de,temp+16
+	call move_monster
+	ld hl,temp+20
+	ld de,temp+16
+	call move_monster
+	ld hl,temp+21
+	ld de,temp+16
+	call move_monster
+
+	ld hl,temp+21
+	ld de,temp+17
+	call move_monster
+	ld hl,temp+22
+	ld de,temp+17
+	call move_monster
+	ld hl,temp+23
+	ld de,temp+17
+	call move_monster
+
+	ld hl,temp+19
+	ld de,temp+18
+	call move_monster
+	ld hl,temp+23
+	ld de,temp+18
+	call move_monster
+	ld hl,temp+24
+	ld de,temp+18
+	call move_monster
+
+	pop hl
+	push hl
+	ld de,-82
+	add hl,de
+	set 2,h
+	ld de,temp
+	ld b,5
+.3:	push bc
+	push hl
+	ld b,5
+.4:	ld a,(de)
+	call WRTVRM
+	res 2,h
+	call RDVRM
+	or a
+	jr z,.5
+	ld a,(de)
+	call WRTVRM
+.5:
+	set 2,h
+	inc de
+	inc hl
+	djnz .4
+	pop hl
+	ld bc,ROW_WIDTH
+	add hl,bc
+	pop bc
+	djnz .3
+	pop hl
+	ret
+
+move_monster:
+	ld a,(de)
+	cp GR_FLOOR
+	ret nz
+	ld a,(hl)
+	push hl
+	ld hl,.1
+	ld bc,16
+	cpir
+	pop hl
+	ret nz
+	push hl
+	call random
+	ld a,l
+	and $54
+	pop hl
+	ret nz
+	ld a,(hl)
+	ld (de),a
+	ld (hl),GR_FLOOR
+	ret
+.1:
+	db "BCEF"
+	db "HILN"
+	db "PQRS"
+	db "TUVZ",0
 
 	;
 	; List of monsters
