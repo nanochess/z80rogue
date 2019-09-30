@@ -18,11 +18,11 @@ MSX: 		equ 1		; MSX computers
 MEMOTECH:	equ 0		; Memotech computers
 	CPM:		equ 0	; If MEMOTECH is defined, define to 1 for CP/M
 
-    if COLECO
-	fname "roguecv.rom"
-    endif
     if MSX
 	fname "roguemsx.rom"
+    endif
+    if COLECO
+	fname "roguecv.rom"
     endif
     if MEMOTECH
       if CPM=1
@@ -37,13 +37,18 @@ MEMOTECH:	equ 0		; Memotech computers
       endif
     endif
 
-    if COLECO+MEMOTECH
-VDP:	equ $be*COLECO+$01*MEMOTECH
-PSG:	equ $ff*COLECO+$06*MEMOTECH
-CTC:	equ            $08*MEMOTECH
-KEYSEL:	equ $80*COLECO+$05*MEMOTECH
-KEY1:	equ            $05*MEMOTECH
-KEY2:	equ            $06*MEMOTECH
+    if MSX
+	org $4000,$7fff
+
+	db $41,$42	; MSX cartridge header
+	dw start	; Start of game
+	dw 0
+	dw 0
+	dw 0
+
+VDP.DR:	equ $0006	; Memory location with port number for VDP data read
+VDP.DW:	equ $0007	; Memory location with port number for VDP data write
+
     endif
 
     if COLECO
@@ -70,20 +75,6 @@ JOY1:	equ $fc
 JOY2:	equ $ff
     endif
 
-    if MSX
-	org $4000,$7fff
-
-	db $41,$42	; MSX cartridge header
-	dw start	; Start of game
-	dw 0
-	dw 0
-	dw 0
-
-VDP.DR:	equ $0006	; Memory location with port number for VDP data read
-VDP.DW:	equ $0007	; Memory location with port number for VDP data write
-
-    endif
-
     if MEMOTECH
 rom_start:
 	jp start
@@ -97,6 +88,15 @@ rom_start:
 null_vector:
 	ei
 	reti
+    endif
+
+    if COLECO+MEMOTECH
+VDP:	equ $be*COLECO+$01*MEMOTECH
+PSG:	equ $ff*COLECO+$06*MEMOTECH
+CTC:	equ            $08*MEMOTECH
+KEYSEL:	equ $80*COLECO+$05*MEMOTECH
+KEY1:	equ            $05*MEMOTECH
+KEY2:	equ            $06*MEMOTECH
     endif
 
     if COLECO+MEMOTECH
@@ -1275,7 +1275,16 @@ move_monsters:
 .1:	push bc
 	push hl
 	ld b,5
-.2:	call RDVRM
+.2:	ld a,h
+	cp $3c
+	jr c,.0
+	cp $40
+	jr nc,.0
+	call RDVRM
+	jr .7
+
+.0:	ld a,'.'
+.7:
 	ld (de),a
 	inc de
 	inc hl
@@ -1376,7 +1385,13 @@ move_monsters:
 .3:	push bc
 	push hl
 	ld b,5
-.4:	ld a,(de)
+.4:
+	ld a,h
+	cp $3c
+	jr c,.6
+	cp $40
+	jr nc,.6
+	ld a,(de)
 	call WRTVRM
 	res 2,h
 	call RDVRM
@@ -1388,6 +1403,7 @@ move_monsters:
 	call WRTVRM
 .5:
 	set 2,h
+.6:
 	inc de
 	inc hl
 	djnz .4
@@ -1834,7 +1850,7 @@ title_letters:
 	db "     _______                            "
 	db "    | _ | _ |                           "
 	db "  ___\V/||/'|_ __ ___   __ _ _   _  ___ "
-	db " |_ //_\| /|| '__/ _ \ / _` | | | |/ _ \"
+	db " |_ //_\|/ || '__/ _ \ / _` | | | |/ _ \"
 	db "  //||_|\|_// | | (_) | (_| | |_| |  __/"
 	db " /__\___/\_/|_|  \___/ \__, |\__,_|\___|"
 	db " \        A________     __/ |          /"          
@@ -1991,7 +2007,7 @@ letters_bitmaps:
 	db $00,$00,$70,$88,$88,$78,$08,$70	; $67
 
 	db $80,$80,$b0,$c8,$88,$88,$88,$00	; $68
-	db $20,$00,$70,$20,$20,$20,$70,$00	; $69
+	db $20,$00,$60,$20,$20,$20,$70,$00	; $69
 	db $00,$00,$08,$08,$88,$88,$70,$00	; $6a
 	db $80,$80,$90,$a0,$e0,$90,$88,$00	; $6b
 	db $60,$20,$20,$20,$20,$20,$70,$00	; $6c
