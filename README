@@ -13,9 +13,10 @@ by Oscar Toledo G. Sep/29/2019.
 http://nanochess.org
 https://github.com/nanochess/z80rogue
 
-You need tniASM v0.44 to assemble it:
+You need the gasm80 assembler to assemble it. It is available
+at https://github.com/nanochess/gasm80
 
-    tniasm rogue.asm
+    gasm80 rogue.asm -o rogue.rom
 
 You can edit internally the definitions for assembly for MSX,
 Colecovision, or Memotech (put 1 to your selected platform,
@@ -24,7 +25,8 @@ and zero for all others).
 It should be easily portable to any computer/console with
 Z80 CPU and TMS9928 video processor.
  
-This is an almost direct port of my game bootRogue.
+This is an almost direct port of my game bootRogue
+available at https://github.com/nanochess/bootRogue
 
 
 >> HOW TO PLAY <<
@@ -59,3 +61,7 @@ ladder to surface.
 Enjoy it!
 
 
+>> CREDITS
+
+Matthew Eggleston pinpointed bugs when assembling the game
+with gasm80 and helped to update it.

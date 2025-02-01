@@ -11,25 +11,25 @@
 	;
 	; Define all to zero, put to one your desired target
 	;
-COLECO:		equ 0		; Colecovision consoles
+COLECO:		equ 1		; Colecovision consoles
 
-MSX: 		equ 1		; MSX computers
+MSX: 		equ 0		; MSX computers
 
 MEMOTECH:	equ 0		; Memotech computers
 	CPM:		equ 0	; If MEMOTECH is defined, define to 1 for CP/M
 
     if MSX
-	fname "roguemsx.rom"
+	; roguemsx.rom
     endif
     if COLECO
-	fname "roguecv.rom"
+	; roguecv.rom
     endif
     if MEMOTECH
       if CPM=1
-	fname "roguemt.com"
+	; roguemt.com
 	org $0100
       else
-	fname "roguemt.run"
+	; roguemt.run
 	org $40fc
 
 	dw rom_start
@@ -38,7 +38,7 @@ MEMOTECH:	equ 0		; Memotech computers
     endif
 
     if MSX
-	org $4000,$7fff
+	org $4000
 
 	db $41,$42	; MSX cartridge header
 	dw start	; Start of game
@@ -52,7 +52,7 @@ VDP.DW:	equ $0007	; Memory location with port number for VDP data write
     endif
 
     if COLECO
-	org $8000,$bfff
+	org $8000
 	db $55,$aa	; Colecovision cartridge header (no Coleco logo)
 	dw $0000
 	dw $0000
@@ -1849,13 +1849,13 @@ test:
 title_letters:
 	db "     _______                            "
 	db "    | _ | _ |                           "
-	db "  ___\V/||/'|_ __ ___   __ _ _   _  ___ "
-	db " |_ //_\|/ || '__/ _ \ / _` | | | |/ _ \"
-	db "  //||_|\|_// | | (_) | (_| | |_| |  __/"
-	db " /__\___/\_/|_|  \___/ \__, |\__,_|\___|"
-	db " \        A________     __/ |          /"          
-	db "  \    )==o________>   |___/          / "
-	db "   \______V__________________________/  "
+	db "  ___\\V/||/'|_ __ ___   __ _ _   _  ___ "
+	db " |_ //_\\|/ || '__/ _ \\ / _` | | | |/ _ \\"
+	db "  //||_|\\|_// | | (_) | (_| | |_| |  __/"
+	db " /__\\___/\\_/|_|  \\___/ \\__, |\\__,_|\\___|"
+	db " \\        A________     __/ |          /"          
+	db "  \\    )==o________>   |___/          / "
+	db "   \\______V__________________________/  "
 	db "                                        "
 	db "           by Oscar Toledo G.           "
 	db "                                        "
@@ -2180,16 +2180,16 @@ letters_bitmaps:
 rom_end:
 
     if MSX
-	ds $6000-$,$ff
+	times $6000-$ db $ff
     endif
     if COLECO
-       ds $a000-$,$ff
+       times $a000-$ db $ff
     endif
     if MEMOTECH
       if CPM=1
-        ds $80-($ and $7f),$00
+        times $80-($ and $7f) db $00
       else
-        ds $80-(($+4) and $7f),$00
+        times $80-(($+4) and $7f) db $00
       endif
     endif
 
